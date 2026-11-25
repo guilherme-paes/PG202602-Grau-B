@@ -85,7 +85,17 @@ def escolher_arquivo(pasta: Path, descricao: str) -> Path | None:
     print(f"\n--- Escolher {descricao} ---")
     for i, arquivo in enumerate(arquivos, 1):
         print(f"  {i}) {arquivo.name}")
-    entrada = input("Número da lista ou caminho completo (Enter cancela): ").strip().strip("\"'")
+    try:
+        entrada = input("Número da lista ou caminho completo (Enter cancela): ").strip().strip("\"'")
+    except (EOFError, KeyboardInterrupt):
+        # Sem terminal interativo (ex.: botão "Run" do VS Code) input() não tem
+        # de onde ler. Cancela em vez de derrubar o app e explica como resolver.
+        print(
+            "\n[entrada indisponível] O menu de arquivos precisa de um terminal interativo.\n"
+            "  Rode pelo terminal:  python main.py\n"
+            "  ou abra a foto direto:  python main.py caminho/da/foto.jpg"
+        )
+        return None
     if not entrada:
         return None
     if entrada.isdigit() and 1 <= int(entrada) <= len(arquivos):
@@ -117,6 +127,7 @@ class Aplicacao:
         self.colados: list[tuple[np.ndarray, int, int]] = []  # (bgra, x, y) já redimensionados
 
         self.resultado: np.ndarray | None = None  # o que é salvo (sem o texto da tela)
+        self.mostrar_ajuda = False  # overlay de ajuda na janela (tecla H liga/desliga)
         self.sujo = True
         self.janela_pronta = False
         self._sincronizando = False
@@ -448,6 +459,8 @@ class Aplicacao:
         elif tecla == ord("r"):
             self.resetar()
         elif tecla == ord("h"):
+            self.mostrar_ajuda = not self.mostrar_ajuda
+            self.sujo = True
             print(AJUDA)
         return True
 
@@ -488,6 +501,19 @@ class Aplicacao:
         for i, linha in enumerate(linhas):
             cv2.putText(tela, linha, (8, 22 + 22 * i), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (255, 255, 255), 1, cv2.LINE_AA)
+        if self.mostrar_ajuda:
+            tela = self._desenhar_ajuda(tela)
+        return tela
+
+    def _desenhar_ajuda(self, tela: np.ndarray) -> np.ndarray:
+        """Overlay com a ajuda de teclas por cima da imagem (tecla H liga/desliga)."""
+        linhas = [_ascii(linha) for linha in AJUDA.strip("\n").splitlines()]
+        tela = (tela * 0.25).astype(np.uint8)  # escurece tudo para a ajuda ficar legível
+        y = 24
+        for linha in linhas:
+            cv2.putText(tela, linha, (12, y), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.45, (255, 255, 255), 1, cv2.LINE_AA)
+            y += 20
         return tela
 
     def _criar_janela(self) -> None:
